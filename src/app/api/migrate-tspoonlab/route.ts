@@ -13,34 +13,46 @@ export async function POST(request: Request) {
         let apiKey = ''
 
         // Check if we received credentials in the body
+        let body
         try {
-            const body = await request.json()
-            if (body.username && body.password) {
-                // Autenticar con TSpoonLab
-                const loginRes = await fetch('https://www.tspoonlab.com/recipes/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `username=${encodeURIComponent(body.username)}&password=${encodeURIComponent(body.password)}`
-                })
-
-                const remembermeHeader = loginRes.headers.get('rememberme')
-
-                // Si la cabecera rememberme existe, el login fue exitoso
-                if (remembermeHeader) {
-                    apiKey = remembermeHeader
-
-                    // Guardar en base de datos para futuros usos
-                    await supabase
-                        .from('tenant_config')
-                        .upsert({ user_id: session.user.id, tspoonlab_api_key: apiKey }, { onConflict: 'user_id' })
-                } else {
-                    return NextResponse.json({ error: 'Credenciales de TSpoonLab incorrectas' }, { status: 401 })
-                }
-            }
+            body = await request.json()
         } catch (e) {
-            // Ignorar errores de parseo si no hay body
+            // No body
+        }
+
+        if (body && body.username && body.password) {
+            // Autenticar con TSpoonLab
+            const loginRes = await fetch('https://www.tspoonlab.com/recipes/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `username=${encodeURIComponent(body.username)}&password=${encodeURIComponent(body.password)}`
+            })
+
+            const remembermeHeader = loginRes.headers.get('rememberme')
+
+            // Si la cabecera rememberme existe, el login fue exitoso
+            if (remembermeHeader) {
+                apiKey = remembermeHeader
+
+                // Guardar en base de datos para futuros usos
+                const { data: existingConfig } = await supabase
+                    .from('tenant_config')
+                    .select('id')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle()
+
+                if (existingConfig) {
+                    const { error: dbErr } = await supabase.from('tenant_config').update({ tspoonlab_api_key: apiKey }).eq('id', existingConfig.id)
+                    if (dbErr) throw dbErr
+                } else {
+                    const { error: dbErr } = await supabase.from('tenant_config').insert({ user_id: session.user.id, tspoonlab_api_key: apiKey })
+                    if (dbErr) throw dbErr
+                }
+            } else {
+                return NextResponse.json({ error: 'Credenciales de TSpoonLab incorrectas' }, { status: 401 })
+            }
         }
 
         // Si no se proporcionaron credenciales o fallaron, intentamos cargar de DB
