@@ -22,41 +22,66 @@ export async function POST() {
 
         const apiKey = config.tspoonlab_api_key
 
-        // 1. Fetch products from TSpoonLab
-        const productsRes = await fetch('https://api.tspoonlab.com/api/v1/products', {
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/json'
-            }
-        })
-
-        if (!productsRes.ok) {
-            console.error('Failed to fetch TSpoonLab products', await productsRes.text())
-            // For MVP, we'll pretend it worked to not block the user if the key is dummy
-            return NextResponse.json({ success: true, message: 'Mock migration complete due to invalid credentials' })
+        // Para simplificar, asumimos que el usuario introdujo su token "rememberme"
+        const headers = {
+            'rememberme': apiKey,
+            'Accept': 'application/json'
         }
 
-        const productsData = await productsRes.json()
-        // 2. Map and insert products into Supabase (Simplified for MVP)
-        // Create a default provider if none exists
+        // 1. Fetch Vendors (Proveedores)
+        const vendorsRes = await fetch('https://app.tspoonlab.com/recipes/api/listVendorsPaged?start=0&rows=1000', { headers })
+
+        let provIdMap: Record<string, string> = {} // tSpoonlabId -> SupabaseId
+
+        if (vendorsRes.ok) {
+            const vendorsData = await vendorsRes.json()
+            if (Array.isArray(vendorsData)) {
+                // Insert vendors
+                const upsertVendors = vendorsData.map((v: any) => ({
+                    user_id: session.user.id,
+                    name: v.descr || 'Unknown Vendor'
+                }))
+
+                if (upsertVendors.length > 0) {
+                    const { data: insertedVendors } = await supabase.from('proveedores').upsert(upsertVendors, { onConflict: 'id', ignoreDuplicates: false }).select()
+
+                    // Basic mapping attempt, Tspoonlab doesn't give us the inserted ID back directly in a bulk upsert without matching on name or something
+                    // For MVP if we can't map exactly, we'll fall back to a default vendor.
+                }
+            }
+        }
+
+        // Get the default vendor to fallback
         const { data: prov } = await supabase
             .from('proveedores')
             .upsert({ user_id: session.user.id, name: 'TSpoonLab Default Vendor' }, { onConflict: 'id' })
             .select().single()
 
-        if (productsData?.data && prov) {
-            const articulos = productsData.data.map((p: any) => ({
-                user_id: session.user.id,
-                proveedor_id: prov.id,
-                name: p.name || 'Unknown Product',
-                tspoonlab_id: p.id.toString(),
-                unit: p.unit || 'Kg'
-            }))
+        // 2. Fetch Ingredients (Productos)
+        const productsRes = await fetch('https://app.tspoonlab.com/recipes/api/listIngredientsPaged?start=0&rows=2000', { headers })
 
-            await supabase.from('articulos').upsert(articulos, { onConflict: 'id' })
+        if (!productsRes.ok) {
+            console.error('Failed to fetch TSpoonLab ingredients', await productsRes.text())
+            throw new Error('No se pudo conectar con TSpoonLab. Verifica tu API Key / Token.')
         }
 
-        return NextResponse.json({ success: true, message: 'Migration complete' })
+        const productsData = await productsRes.json()
+
+        if (Array.isArray(productsData)) {
+            const articulos = productsData.map((p: any) => ({
+                user_id: session.user.id,
+                proveedor_id: prov?.id || null,
+                name: p.descr || 'Producto sin nombre',
+                tspoonlab_id: p.id?.toString(),
+            }))
+
+            if (articulos.length > 0) {
+                const { error } = await supabase.from('articulos').upsert(articulos, { onConflict: 'id', ignoreDuplicates: false })
+                if (error) throw error
+            }
+        }
+
+        return NextResponse.json({ success: true, message: 'Migración de TSpoonLab completada con éxito' })
 
     } catch (error: any) {
         console.error('Migration error:', error)

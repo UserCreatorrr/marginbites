@@ -49,15 +49,18 @@ export default function OnboardingForm({ userId }: { userId: string }) {
             <div className="space-y-4 rounded-md shadow-sm">
                 <div>
                     <label htmlFor="api-key" className="block text-sm font-medium text-gray-700">
-                        tSpoonLab API Key
+                        tSpoonLab Token (rememberme)
                     </label>
+                    <p className="mt-1 text-xs text-gray-500">
+                        Obtén tu token haciendo login en la API de TSpoonLab y usa el valor del cookie/token "rememberme".
+                    </p>
                     <input
                         id="api-key"
                         name="apiKey"
                         type="text"
                         required
-                        className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-black sm:text-sm"
-                        placeholder="Paste your API key here"
+                        className="mt-2 block w-full rounded-md border-gray-300 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-black sm:text-sm"
+                        placeholder="Ejemplo: aGVucnkudXBzYWxsLmRAZXXXXXXXXXXXXXXXXXX"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
                     />
