@@ -25,20 +25,16 @@ export async function POST(request: Request) {
                     body: `username=${encodeURIComponent(body.username)}&password=${encodeURIComponent(body.password)}`
                 })
 
-                const setCookieHeader = loginRes.headers.get('set-cookie') || loginRes.headers.get('Set-Cookie')
+                const remembermeHeader = loginRes.headers.get('rememberme')
 
-                // Si la cookie rememberme existe, el login fue exitoso
-                if (setCookieHeader && setCookieHeader.includes('rememberme=')) {
-                    // Extract the rememberme token
-                    const matches = setCookieHeader.match(/rememberme=([^;]+)/)
-                    if (matches && matches[1]) {
-                        apiKey = matches[1]
+                // Si la cabecera rememberme existe, el login fue exitoso
+                if (remembermeHeader) {
+                    apiKey = remembermeHeader
 
-                        // Guardar en base de datos para futuros usos
-                        await supabase
-                            .from('tenant_config')
-                            .upsert({ user_id: session.user.id, tspoonlab_api_key: apiKey }, { onConflict: 'user_id' })
-                    }
+                    // Guardar en base de datos para futuros usos
+                    await supabase
+                        .from('tenant_config')
+                        .upsert({ user_id: session.user.id, tspoonlab_api_key: apiKey }, { onConflict: 'user_id' })
                 } else {
                     return NextResponse.json({ error: 'Credenciales de TSpoonLab incorrectas' }, { status: 401 })
                 }
