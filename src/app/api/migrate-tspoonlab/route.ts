@@ -86,23 +86,39 @@ export async function POST(request: Request) {
                 // Insert vendors
                 const upsertVendors = vendorsData.map((v: any) => ({
                     user_id: session.user.id,
-                    name: v.descr || 'Unknown Vendor'
+                    name: v.descr || 'Unknown Vendor',
+                    tspoonlab_id: v.id?.toString()
                 }))
 
                 if (upsertVendors.length > 0) {
-                    const { data: insertedVendors } = await supabase.from('proveedores').upsert(upsertVendors, { onConflict: 'id', ignoreDuplicates: false }).select()
+                    const { data: insertedVendors, error: vendorErr } = await supabase.from('proveedores').insert(upsertVendors).select()
+                    if (vendorErr) {
+                        console.error('Vendor insert error:', vendorErr)
+                        throw new Error(`Error insertando proveedores: ${vendorErr.message}`)
+                    }
 
-                    // Basic mapping attempt, Tspoonlab doesn't give us the inserted ID back directly in a bulk upsert without matching on name or something
-                    // For MVP if we can't map exactly, we'll fall back to a default vendor.
+                    // Build map for products
+                    if (insertedVendors) {
+                        insertedVendors.forEach(v => {
+                            if (v.tspoonlab_id) provIdMap[v.tspoonlab_id] = v.id
+                        })
+                    }
                 }
             }
         }
 
         // Get the default vendor to fallback
-        const { data: prov } = await supabase
+        let defaultProvId = null
+        const { data: prov, error: provokeErr } = await supabase
             .from('proveedores')
-            .upsert({ user_id: session.user.id, name: 'TSpoonLab Default Vendor' }, { onConflict: 'id' })
+            .insert({ user_id: session.user.id, name: 'TSpoonLab Default Vendor' })
             .select().single()
+
+        if (provokeErr) {
+            console.error('Default vendor insert error:', provokeErr)
+        } else if (prov) {
+            defaultProvId = prov.id
+        }
 
         // 2. Fetch Ingredients (Productos)
         const productsRes = await fetch('https://app.tspoonlab.com/recipes/api/listIngredientsPaged?start=0&rows=2000', { headers })
@@ -117,14 +133,22 @@ export async function POST(request: Request) {
         if (Array.isArray(productsData)) {
             const articulos = productsData.map((p: any) => ({
                 user_id: session.user.id,
-                proveedor_id: prov?.id || null,
+                proveedor_id: p.idVendor ? (provIdMap[p.idVendor.toString()] || defaultProvId) : defaultProvId,
                 name: p.descr || 'Producto sin nombre',
                 tspoonlab_id: p.id?.toString(),
             }))
 
             if (articulos.length > 0) {
-                const { error } = await supabase.from('articulos').upsert(articulos, { onConflict: 'id', ignoreDuplicates: false })
-                if (error) throw error
+                // Insert in batches of 500 to avoid request size limits
+                const batchSize = 500;
+                for (let i = 0; i < articulos.length; i += batchSize) {
+                    const batch = articulos.slice(i, i + batchSize);
+                    const { error } = await supabase.from('articulos').insert(batch)
+                    if (error) {
+                        console.error('Products insert error:', error)
+                        throw new Error(`Error insertando artículos: ${error.message}`)
+                    }
+                }
             }
         }
 
