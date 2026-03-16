@@ -17,6 +17,16 @@ export default async function DashboardLayout({
         redirect('/login')
     }
 
+    const { data: config } = await supabase
+        .from('tenant_config')
+        .select('tspoonlab_api_key')
+        .eq('user_id', session.user.id)
+        .single()
+
+    if (!config || !config.tspoonlab_api_key) {
+        redirect('/onboarding')
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             {/* Top Navbar */}
