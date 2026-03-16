@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 export default function OnboardingForm({ userId }: { userId: string }) {
-    const [apiKey, setApiKey] = useState('')
+    const [username, setUsername] = useState('')
+    const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const router = useRouter()
-    const supabase = createClient()
 
     const handleSaveAndMigrate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -18,17 +18,15 @@ export default function OnboardingForm({ userId }: { userId: string }) {
         setError(null)
 
         try {
-            // Guarda la key en supabase
-            const { error: dbError } = await supabase
-                .from('tenant_config')
-                .upsert({ user_id: userId, tspoonlab_api_key: apiKey }, { onConflict: 'user_id' })
+            const res = await fetch('/api/migrate-tspoonlab', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
 
-            if (dbError) throw dbError
-
-            // Idealmente, llamar a un endpoint para importar (/api/migrate-tspoonlab)
-            const res = await fetch('/api/migrate-tspoonlab', { method: 'POST' })
             if (!res.ok) {
-                throw new Error('Failed to start migration. You can retry later from settings.')
+                const data = await res.json()
+                throw new Error(data.error || 'Failed to authenticate with TSpoonLab. Check your credentials.')
             }
 
             router.push('/dashboard')
@@ -48,21 +46,33 @@ export default function OnboardingForm({ userId }: { userId: string }) {
         <form className="mt-8 space-y-6" onSubmit={handleSaveAndMigrate}>
             <div className="space-y-4 rounded-md shadow-sm">
                 <div>
-                    <label htmlFor="api-key" className="block text-sm font-medium text-gray-700">
-                        tSpoonLab Token (rememberme)
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                        Email de TSpoonLab
                     </label>
-                    <p className="mt-1 text-xs text-gray-500">
-                        Obtén tu token haciendo login en la API de TSpoonLab y usa el valor del cookie/token "rememberme".
-                    </p>
                     <input
-                        id="api-key"
-                        name="apiKey"
-                        type="text"
+                        id="username"
+                        name="username"
+                        type="email"
                         required
-                        className="mt-2 block w-full rounded-md border-gray-300 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-black sm:text-sm"
-                        placeholder="Ejemplo: aGVucnkudXBzYWxsLmRAZXXXXXXXXXXXXXXXXXX"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-black sm:text-sm"
+                        placeholder="tu@email.com"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                    />
+                </div>
+                <div className="pt-2">
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                        Contraseña de TSpoonLab
+                    </label>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        required
+                        className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-black sm:text-sm"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                     />
                 </div>
             </div>
@@ -76,7 +86,7 @@ export default function OnboardingForm({ userId }: { userId: string }) {
             <div className="flex flex-col space-y-3">
                 <button
                     type="submit"
-                    disabled={loading || !apiKey}
+                    disabled={loading || !username || !password}
                     className="group relative flex w-full justify-center rounded-md bg-black px-3 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
                 >
                     {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Connect & Import'}
