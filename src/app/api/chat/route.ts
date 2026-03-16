@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-})
+
 
 export async function POST(request: Request) {
     try {
@@ -19,6 +17,10 @@ export async function POST(request: Request) {
 
         // Este es un bot muy básico. Idealmente aquí iría un loop de Function Calling 
         // para consultar la BD. Por ahora sólo responde de forma genérica.
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        })
+
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [

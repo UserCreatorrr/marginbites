@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import OpenAI from 'openai'
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-})
+
 
 export async function POST(request: Request) {
     try {
@@ -29,6 +26,10 @@ export async function POST(request: Request) {
         const base64Image = buffer.toString('base64')
 
         // Call OpenAI Vision API
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        })
+
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
