@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { ArrowLeft, ChefHat } from 'lucide-react'
 import EscandalloItemsForm from './escandallo-items-form'
 
-export default async function EscandalloDetailPage({ params }: { params: { id: string } }) {
+export default async function EscandalloDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const resolvedParams = await params
     const supabase = await createClient()
 
     const { data: { session } } = await supabase.auth.getSession()
@@ -26,7 +27,7 @@ export default async function EscandalloDetailPage({ params }: { params: { id: s
                 )
             )
         `)
-        .eq('id', params.id)
+        .eq('id', resolvedParams.id)
         .eq('user_id', session.user.id)
         .single()
 
