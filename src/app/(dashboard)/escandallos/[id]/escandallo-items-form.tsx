@@ -30,7 +30,6 @@ export default function EscandalloItemsForm({
         try {
             const { data: { session } } = await supabase.auth.getSession()
             const { data, error } = await supabase.from('escandallo_items').insert({
-                user_id: session?.user.id,
                 escandallo_id: escandalloId,
                 articulo_id: selectedArticulo,
                 quantity: parseFloat(quantity)
